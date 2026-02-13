@@ -48,39 +48,55 @@ Each group is recorded across three conditions: **Baseline → Drug → Washout*
 
 ## Features Analyzed
 
-The pipeline analyzes 16 features extracted by AQuA2, organized into categories:
+The pipeline analyzes 16 features extracted by AQuA2:
 
-**Intensity & Magnitude (Fold-Change Normalized)**
+**Intensity & Magnitude**
 - Max ΔF, Max ΔF/F
 - AUC metrics (dat, dF, dF/F)
 
-**Morphological (Fold-Change Normalized)**
+**Morphological**
 - Area, Perimeter, Circularity
 
-**Temporal Dynamics (Fold-Change Normalized)**
+**Temporal Dynamics**
 - Event overlay duration
 - Duration at 50% and 10% thresholds
 - Rising duration (10%–90%)
 - Decaying duration (90%–10%)
 
-**Network (Fold-Change Normalized)**
+**Network**
 - Number of co-localized events
 - Co-localized events with similar size
 - Maximum simultaneous events
 
-### Normalization Strategy
+### Normalization
 
-Each feature is normalized relative to the baseline condition median for the same slice:
+All features are normalized using **fold-change** relative to the baseline condition median for the same slice:
 
-- **Fold-change**: `value / baseline_median` — used for intensity, spatial, and temporal features. Interpretation: 2.0 = doubled, 0.5 = halved.
-- **Log₂ fold-change** *(available but currently using fold-change)*: `log₂((value + 1) / (baseline_median + 1))` — designed for count data with zeros.
+```
+normalized_value = value / baseline_median
+```
+
+Interpretation: 2.0 = doubled relative to baseline, 0.5 = halved.
 
 ## Statistical Methods
 
-- **One-way ANOVA** — parametric comparison across groups
-- **Kruskal-Wallis** — non-parametric alternative
-- **Tukey HSD** — post-hoc pairwise comparisons (when ANOVA p < 0.05)
-- **FDR correction** — Benjamini-Hochberg method for multiple comparisons
+The pipeline uses a non-parametric statistical framework:
+
+```
+Kruskal-Wallis (omnibus test across groups)
+        │
+        ▼  (if significant after FDR correction)
+Dunn's test (pairwise comparisons vs WT control)
+        │
+        ▼
+FDR correction (Benjamini-Hochberg)
+```
+
+- **Kruskal-Wallis test** — non-parametric omnibus comparison across all groups
+- **Dunn's post-hoc test** — pairwise comparisons against the WT control group, run only for features significant after FDR correction
+- **FDR correction** — Benjamini-Hochberg method applied at both the omnibus level (across features) and the post-hoc level (across pairwise comparisons)
+
+Plots display **median ± IQR/2** (half interquartile range), consistent with the non-parametric approach.
 
 ## Data Structure
 
@@ -94,8 +110,6 @@ Output__/
 │   │   ├── slice1_psi_AQuA2_Ch1.csv
 │   │   ├── slice1_washout_AQuA2_Ch1.csv
 │   │   ├── slice2_baseline_AQuA2_Ch1.csv
-│   │   ├── slice2_psi_AQuA2_Ch1.csv
-│   │   ├── slice2_washout_AQuA2_Ch1.csv
 │   │   └── ...
 │   └── data2/
 │       └── ...
@@ -120,12 +134,13 @@ Output__/
 Each CSV file follows the pattern:
 
 ```
-slice<N>_<condition>_AQuA2_Ch1.csv
+slice<N>_<condition>_AQuA2_<channel>.csv
 ```
 
 Where:
 - `<N>` — slice number (integer)
-- `<condition>` — one of: `baseline`, `psi`, `psi+antag`, or `washout`
+- `<condition>` — one of: `baseline`, `psi`, or `washout`
+- `<channel>` — AQuA2 channel identifier. Configurable via `CHANNEL_SUFFIX` in the notebook; set to `''` if your filenames don't include a channel suffix.
 
 ### AQuA2 CSV Format
 
@@ -133,7 +148,7 @@ AQuA2 exports data in **transposed format** (features as rows, events as columns
 
 ### Generated Files
 
-After running `analysis.ipynb`, the following normalized CSVs are generated and used by `analysis_time.ipynb`:
+After running `analysis.ipynb`, normalized CSVs are generated for use by `analysis_time.ipynb`:
 
 ```
 Output__/<group>/<GROUP>_baseline_normalized.csv
@@ -150,7 +165,7 @@ Open and run `analysis.ipynb`. This will:
 2. Filter events to frames 20–100 (configurable)
 3. Normalize all features relative to baseline
 4. Generate timepoint plots (Baseline → Drug → Washout) for each group
-5. Run statistical tests across groups (ANOVA, Kruskal-Wallis, Tukey HSD)
+5. Run statistical tests across groups
 6. Export normalized CSVs for time-series analysis
 
 ### Step 2: Run time-series analysis
@@ -158,7 +173,7 @@ Open and run `analysis.ipynb`. This will:
 Open and run `analysis_time.ipynb`. This will:
 1. Load the normalized CSVs generated in Step 1
 2. Bin events into frame groups (default: 10 frames per bin)
-3. Generate multi-panel time-series plots for each group showing temporal dynamics
+3. Generate multi-panel time-series plots for each group
 
 ### Configuration
 
@@ -169,7 +184,8 @@ Key parameters can be adjusted in each notebook:
 |-----------|---------|-------------|
 | `MIN_FRAME` | 20 | Start frame (excludes early artifacts) |
 | `MAX_FRAME` | 100 | End frame (excludes late artifacts) |
-| `ERROR_TYPE` | `'sem'` | Error bars: `'sem'`, `'iqr'`, or `'mad'` |
+| `CHANNEL_SUFFIX` | `'Ch1'` | Channel identifier in filenames (set `''` to omit) |
+| `ERROR_TYPE` | `'iqr'` | Error bars: `'iqr'` (half IQR) or `'mad'` |
 
 **analysis_time.ipynb**
 | Parameter | Default | Description |
@@ -197,3 +213,4 @@ To use this pipeline with your own experimental groups:
    }
    ```
 3. **Update the data loading section** in `analysis_time.ipynb` to match your groups
+
