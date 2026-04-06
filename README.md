@@ -1,4 +1,4 @@
-# Astrocyte Calcium Signaling Analysis Pipeline
+# astrocyte-calcium-pipeline
 
 A Python-based post-processing pipeline for analyzing astrocyte calcium event data exported from AQuA2. This pipeline normalizes calcium event features, generates publication-ready visualizations, and performs statistical comparisons across experimental groups.
 
